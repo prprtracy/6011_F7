@@ -57,7 +57,7 @@ def is_integer_value(value: float) -> bool:
     """Return whether a finite floating-point value is integer-valued."""
     if not is_finite_number(value):
         return False
-    return value == int(value)
+    return value % 1.0 == 0.0
 
 
 def _checked_multiply(left: float, right: float) -> float:
@@ -81,39 +81,37 @@ def _checked_multiply(left: float, right: float) -> float:
     return result
 
 
-def power_by_squaring(base: float, exponent: int) -> float:
+def power_by_squaring(base: float, exponent: float) -> float:
     """Evaluate an integer power in logarithmic time using multiplication."""
-    if exponent == 0:
+    if exponent == 0.0:
         return 1.0
     if base == 0.0:
-        if exponent < 0:
+        if exponent < 0.0:
             raise UnsupportedDomainError(
                 "Zero cannot be raised to a negative exponent."
             )
         return 0.0
 
-    negative_exponent = exponent < 0
-    remaining = -exponent if negative_exponent else exponent
     factor = float(base)
-    result = 1.0
+    remaining = exponent
+    if remaining < 0.0:
+        factor = 1.0 / factor
+        if factor == 0.0 or absolute_value(factor) < MIN_NORMAL:
+            raise NumericRangeError(
+                "The result is too small to be represented accurately by "
+                "this calculator."
+            )
+        remaining = -remaining
 
-    while remaining > 0:
-        if remaining % 2 == 1:
+    result = 1.0
+    while remaining > 0.0:
+        if remaining % 2.0 == 1.0:
             result = _checked_multiply(result, factor)
-        remaining //= 2
-        if remaining > 0:
+        remaining //= 2.0
+        if remaining > 0.0:
             factor = _checked_multiply(factor, factor)
 
-    if not negative_exponent:
-        return result
-
-    reciprocal = 1.0 / result
-    if reciprocal == 0.0 or absolute_value(reciprocal) < MIN_NORMAL:
-        raise NumericRangeError(
-            "The result is too small to be represented accurately by this "
-            "calculator."
-        )
-    return reciprocal
+    return result
 
 
 def natural_log(value: float) -> float:
@@ -155,8 +153,9 @@ def natural_log(value: float) -> float:
     term = z
     total = 0.0
     denominator = 1
+    iteration = 0
 
-    for _ in range(MAX_SERIES_ITERATIONS):
+    while iteration < MAX_SERIES_ITERATIONS:
         addition = term / denominator
         total += addition
         if absolute_value(addition) <= (
@@ -165,11 +164,30 @@ def natural_log(value: float) -> float:
             return 2.0 * total + scale * LN_2
         term *= z_squared
         denominator += 2
+        iteration += 1
 
     raise ConvergenceError(
         "The calculation did not converge within the supported number of "
         "iterations."
     )
+
+
+def nearest_integer_without_builtin(value: float) -> int:
+    """Round a finite value to the nearest integer without built-in helpers."""
+    if value >= 0.0:
+        adjusted = value + 0.5
+        rounded = 0
+        while adjusted >= 1.0:
+            adjusted -= 1.0
+            rounded += 1
+        return rounded
+
+    adjusted = value - 0.5
+    rounded = 0
+    while adjusted <= -1.0:
+        adjusted += 1.0
+        rounded -= 1
+    return rounded
 
 
 def exponential(value: float) -> float:
@@ -180,12 +198,13 @@ def exponential(value: float) -> float:
         )
 
     quotient = value / LN_2
-    scale = int(quotient + 0.5) if quotient >= 0.0 else int(quotient - 0.5)
+    scale = nearest_integer_without_builtin(quotient)
     remainder = value - scale * LN_2
 
     term = 1.0
     total = 1.0
-    for index in range(1, MAX_SERIES_ITERATIONS + 1):
+    index = 1
+    while index <= MAX_SERIES_ITERATIONS:
         term = term * remainder / index
         total += term
         if absolute_value(term) <= (
@@ -203,6 +222,7 @@ def exponential(value: float) -> float:
                 )
             scale_factor = power_by_squaring(2.0, scale)
             return _checked_multiply(total, scale_factor)
+        index += 1
 
     raise ConvergenceError(
         "The calculation did not converge within the supported number of "
@@ -239,7 +259,7 @@ def calculate_power(base: float, exponent: float) -> float:
     if exponent == 0.0 or base == 1.0:
         return 1.0
     if exponent_is_integer:
-        return power_by_squaring(base, int(exponent))
+        return power_by_squaring(base, exponent)
 
     logarithm = natural_log(base)
     product = exponent * logarithm

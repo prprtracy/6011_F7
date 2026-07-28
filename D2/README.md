@@ -2,7 +2,7 @@
 
 ## Course and deliverable
 
-**SOEN 6011 — Summer 2026, Delivery 2**
+**SOEN 6011 - Software Engineering Processes, Delivery 2**
 
 This project implements the assigned function **F7: x raised to y** in Python.
 It provides a Tkinter graphical interface and an independently importable
@@ -10,119 +10,149 @@ calculation layer.
 
 ## Supported real-valued domain
 
-- A positive base supports finite integer-valued and non-integer exponents.
-- A zero base supports only positive exponents. Zero to zero and zero to a
-  negative exponent are rejected.
-- A negative base supports only integer-valued exponents.
-- Only finite, real-valued inputs and results are supported.
-- NaN, infinity, unsupported domain combinations, overflow, and severe
-  underflow are rejected with plain-language messages.
+- For `x > 0`, finite integer-valued and non-integer exponents are supported.
+- For `x = 0`, only `y > 0` is supported. `0^0` and zero raised to a negative
+  exponent are rejected.
+- For `x < 0`, only integer-valued exponents are supported.
+- Results are real-valued and must remain within the supported normal
+  floating-point range.
+- Non-numeric input, NaN, infinity, unsupported domain combinations,
+  overflow, severe underflow, and convergence failure are rejected with
+  specific messages.
 
-## From-scratch implementation
+## From-scratch numerical implementation
 
-No built-in mathematical power, logarithm, or exponential operation is used to
-evaluate x raised to y. The program uses `float()`, `int()`, `format()`, and
-Python iteration facilities only for input conversion, output formatting, and
-algorithm control.
+The numerical calculation layer uses custom arithmetic algorithms and does
+not rely on prohibited built-in or library functions for power evaluation,
+logarithm, exponential evaluation, finite-value checking, integer detection,
+or numerical iteration.
 
-The program uses hybrid power evaluation:
+This restriction applies to the numerical core. Input conversion, string
+handling, output formatting, exception handling, and Tkinter GUI operations
+remain permitted because they support interaction rather than replace the
+required numerical algorithms.
 
-1. Integer-valued exponents use iterative exponentiation by squaring.
-2. Non-integer exponents require a positive base and use the identity
-   `x^y = exp(y × ln(x))`.
-3. Both approximation series have a convergence tolerance and iteration limit.
-4. Checked arithmetic rejects results outside the supported normal
-   floating-point range.
+### Integer exponent path
 
-### Exponentiation by squaring
+Integer-valued exponents use exponentiation by squaring. The algorithm examines
+the exponent in binary, multiplies the result when the remaining exponent is
+odd, squares the factor, and halves the remaining exponent. Its iteration count
+is `O(log |y|)`.
 
-Integer exponents are processed one binary digit at a time. Each loop halves
-the remaining exponent, so the iteration count grows logarithmically with the
-exponent magnitude. Negative integer exponents use the reciprocal of the
-completed positive power.
+For a negative integer exponent, the algorithm inverts the base before the
+loop and then processes `|y|`. It does not compute a positive power and apply a
+final reciprocal. Inverting first prevents an intermediate overflow such as
+`10^400` from masking the correct severe-underflow classification for
+`10^-400`.
 
-### Custom natural logarithm approximation
+### Non-integer exponent path
 
-For a positive base and non-integer exponent, the base is range-reduced near
-one and evaluated with a convergent odd-term series. A stored `ln(2)` constant
-restores the power-of-two scaling.
+For a positive base and non-integer exponent, the calculator uses:
 
-### Custom exponential approximation
+```text
+x^y = exp(y * ln(x))
+```
 
-The exponential argument is reduced to a small remainder, evaluated with an
-iterative Taylor series, and rescaled using the integer exponentiation path.
+`natural_log()` reduces the input by powers of two into a range near one and
+evaluates an odd atanh series. `exponential()` reduces its argument by a
+multiple of `ln(2)`, evaluates a Taylor series, and restores the power-of-two
+scale through the custom integer-power path.
 
-## Tkinter GUI
+Both functions use explicit `while` loops, a convergence tolerance, and a
+maximum iteration count.
 
-The graphical interface provides base and exponent inputs, **Calculate**,
-**Clear**, and **Exit** controls, plus separate result and status fields. The
-Enter key also starts a calculation.
+### Custom numerical checks
+
+- `is_finite_number()` detects NaN and infinity by comparison with
+  `MAX_FLOAT`; it does not call `math.isfinite()`.
+- `is_integer_value()` uses arithmetic remainder to detect integer-valued
+  finite floats; it does not call `int()`.
+- `nearest_integer_without_builtin()` determines the exponential scale through
+  arithmetic and explicit iteration.
+- `_checked_multiply()` checks both result multiplication and factor squaring
+  for overflow and severe underflow.
 
 ## Exception handling
 
 Expected failures derive from `PowerCalculatorError`:
 
-- `InvalidInputError` identifies invalid text, NaN, and infinity.
-- `UnsupportedDomainError` identifies unsupported real-number combinations.
-- `NumericRangeError` identifies overflow and severe underflow.
-- `ConvergenceError` identifies an approximation that reaches its iteration
-  limit.
+- `InvalidInputError` - invalid text, NaN, or infinity.
+- `UnsupportedDomainError` - an unsupported real-valued combination.
+- `NumericRangeError` - overflow or severe underflow.
+- `ConvergenceError` - an approximation exceeds its iteration limit.
 
-The GUI catches these expected errors, displays corrective guidance, and stays
-open so the user can correct the input. Unexpected programming errors are not
-silently hidden.
+The GUI catches these specific expected exceptions, clears the result, displays
+plain-language guidance, and remains open. Unexpected programming errors are
+not silently hidden.
 
-## How to run the program
+## Tkinter GUI
 
-Use a standard Python 3 installation with Tkinter support. No IDE or external
-package is required.
+The interface contains labelled base and exponent fields, **Calculate**,
+**Clear**, and **Exit** buttons, and separate result and status areas. The Enter
+key performs the same action as **Calculate**. **Clear** resets all fields and
+returns focus to the base input.
+
+## Run the application
+
+Use Python 3 with Tkinter support. The program requires no third-party package,
+specific IDE, or IDE configuration.
 
 ```text
 cd D2
 python power_calculator.py
 ```
 
-Press Enter or select **Calculate** to evaluate. **Clear** resets the inputs,
-result, and status. **Exit** closes the application.
+The `if __name__ == "__main__":` guard allows the calculation layer to be
+imported without launching the GUI.
 
-## Representative manual test cases
+## Run independent verification
 
-| Base | Exponent | Expected behavior |
+From the `D2` directory:
+
+```text
+python verify_power_calculator.py
+```
+
+The script reports each case as `PASS` or `FAIL` and exits with a nonzero status
+if any check fails.
+
+## Representative verification cases
+
+| Base `x` | Exponent `y` | Expected behavior |
 |---:|---:|---|
-| 2 | 3 | 8 |
-| 2 | -10 | 0.0009765625 |
-| 4 | 0.5 | approximately 2 |
-| 16 | 0.25 | approximately 2 |
-| -2 | 3 | -8 |
-| 0 | 3 | 0 |
-| 0.25 | 0.5 | approximately 0.5 |
+| 2 | -10 | `0.0009765625` |
+| -2 | -3 | `-0.125` |
+| 2 | 0.3 | approximately `1.23114441334492` |
+| 4 | 0.5 | approximately `2` |
+| 0 | 3 | `0` |
 | 0 | 0 | undefined-domain message |
-| -2 | 0.5 | real-valued-domain message |
+| -2 | 0.5 | integer-exponent-required message |
 | `abc` | 2 | numeric-base message |
 | `nan` | 2 | finite-number message |
-| 10 | 400 | overflow message |
-| 10 | -400 | severe-underflow message |
+| 10 | -400 | severe underflow / result-too-small message |
+| 10 | 400 | overflow / result-too-large message |
 
 ## Known numerical limitations
 
-The calculator targets representative cases within relative error `1e-9`, but
-does not claim support for every possible floating-point input. Inputs are
-parsed as binary floating-point numbers, so very long decimal values may
-already be rounded. Subnormal results below the minimum supported normal
-floating-point magnitude are intentionally rejected as insufficiently accurate.
-Values near overflow or underflow boundaries can be rejected because an
-intermediate step is outside the supported normal range. Approximation error
-can grow for especially ill-conditioned or extreme calculations.
+Inputs are stored as binary floating-point values, so decimal conversion and
+rounding apply before evaluation. Extremely large values have limited integer
+and decimal precision. Subnormal results below `MIN_NORMAL` are intentionally
+rejected as insufficiently accurate. Approximation error can grow near numeric
+boundaries or for ill-conditioned inputs, and the calculator does not support
+complex-valued results.
 
-Extremely large floating-point inputs are limited by binary floating-point
-precision: distinct mathematical integers or decimals can map to the same
-stored `float` before evaluation begins.
-
-## Repository structure
+## D2 structure
 
 ```text
 D2/
-├── power_calculator.py      # Calculation layer and Tkinter application
-├── README.md                # Usage, domain, limitations, and test guidance
-└── screenshots/             # Manual GUI verification evidence
+|-- power_calculator.py          # Numerical layer and Tkinter application
+|-- verify_power_calculator.py   # Independent non-GUI verification
+|-- README.md                    # Usage, behavior, and limitations
+|-- IMPLEMENTATION.md            # Technical design documentation
+|-- screenshots/                 # GUI and repository evidence
+|-- ChatGPT.md                   # GAI evidence
+|-- Claude.md                    # GAI evidence
+|-- D2_CASTROFF_Prompt.md        # CASTROFF-based prompt evidence
+`-- SOEN6011_F7_Power_Function.pdf
+                                 # Delivery 2 presentation
 ```
