@@ -8,6 +8,7 @@ from power_calculator import (
     ConvergenceError,
     InvalidInputError,
     NumericRangeError,
+    PowerCalculatorError,
     UnsupportedDomainError,
     calculate_power,
     parse_number,
@@ -26,7 +27,12 @@ def check_close(name: str, actual: float, expected: float, tolerance: float) -> 
     return passed
 
 
-def check_exception(name: str, action, expected_exception, expected_message: str | None = None) -> bool:
+def check_exception(
+    name: str,
+    action,
+    expected_exception,
+    expected_message: str | None = None,
+) -> bool:
     """Check that the expected exception is raised."""
     try:
         action()
@@ -37,7 +43,7 @@ def check_exception(name: str, action, expected_exception, expected_message: str
             return True
         print(f"FAIL: {name} -> message mismatch: {message}")
         return False
-    except Exception as error:  # pragma: no cover - verification script
+    except PowerCalculatorError as error:
         print(f"FAIL: {name} -> unexpected {type(error).__name__}: {error}")
         return False
 
@@ -57,17 +63,31 @@ all_passed &= check_close("2^0.3", calculate_power(2.0, 0.3), 1.2311444133449163
 all_passed &= check_close("0^3", calculate_power(0.0, 3.0), 0.0, 1e-12)
 all_passed &= check_close("5^0", calculate_power(5.0, 0.0), 1.0, 1e-12)
 
-all_passed &= check_exception("0^0", lambda: calculate_power(0.0, 0.0), UnsupportedDomainError)
-all_passed &= check_exception("0^-1", lambda: calculate_power(0.0, -1.0), UnsupportedDomainError)
-all_passed &= check_exception("(-2)^0.5", lambda: calculate_power(-2.0, 0.5), UnsupportedDomainError)
-all_passed &= check_exception("non-numeric base", lambda: parse_number("abc", "base x"), InvalidInputError)
-all_passed &= check_exception("NaN", lambda: parse_number("nan", "base x"), InvalidInputError)
-all_passed &= check_exception("infinity", lambda: parse_number("inf", "base x"), InvalidInputError)
+all_passed &= check_exception(
+    "0^0", lambda: calculate_power(0.0, 0.0), UnsupportedDomainError
+)
+all_passed &= check_exception(
+    "0^-1", lambda: calculate_power(0.0, -1.0), UnsupportedDomainError
+)
+all_passed &= check_exception(
+    "(-2)^0.5", lambda: calculate_power(-2.0, 0.5), UnsupportedDomainError
+)
+all_passed &= check_exception(
+    "non-numeric base",
+    lambda: parse_number("abc", "base x"),
+    InvalidInputError,
+)
+all_passed &= check_exception(
+    "NaN", lambda: parse_number("nan", "base x"), InvalidInputError
+)
+all_passed &= check_exception(
+    "infinity", lambda: parse_number("inf", "base x"), InvalidInputError
+)
 all_passed &= check_exception(
     "10^400",
     lambda: calculate_power(10.0, 400.0),
     NumericRangeError,
-    "too large",
+    "exceeds the supported numeric range",
 )
 all_passed &= check_exception(
     "10^-400",

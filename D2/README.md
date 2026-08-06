@@ -1,19 +1,22 @@
 # Power Function Calculator
 
-## Course and deliverable
+## Version
 
-**SOEN 6011 - Software Engineering Processes, Delivery 2**
+1.1.0
 
 This project implements the assigned function **F7: x raised to y** in Python.
 It provides a Tkinter graphical interface and an independently importable
 calculation layer.
 
-## Supported real-valued domain
+## Supported Domain
 
-- For `x > 0`, finite integer-valued and non-integer exponents are supported.
-- For `x = 0`, only `y > 0` is supported. `0^0` and zero raised to a negative
-  exponent are rejected.
-- For `x < 0`, only integer-valued exponents are supported.
+- Positive bases support finite integer and decimal exponents.
+- Negative bases support only integer exponents.
+- Negative exponents return reciprocals.
+- Zero with a positive exponent returns zero.
+- `0^0` and zero with a negative exponent are rejected.
+- Complex-number results are unsupported.
+- Direct expressions such as `sqrt(2)` are not parsed.
 - Results are real-valued and must remain within the supported normal
   floating-point range.
 - Non-numeric input, NaN, infinity, unsupported domain combinations,
@@ -24,8 +27,9 @@ calculation layer.
 
 The numerical calculation layer uses custom arithmetic algorithms and does
 not rely on prohibited built-in or library functions for power evaluation,
-logarithm, exponential evaluation, finite-value checking, integer detection,
-or numerical iteration.
+logarithm, exponential evaluation, integer detection, or numerical iteration.
+Standard finite-value checks validate results without replacing a calculation
+algorithm.
 
 This restriction applies to the numerical core. Input conversion, string
 handling, output formatting, exception handling, and Tkinter GUI operations
@@ -63,14 +67,13 @@ maximum iteration count.
 
 ### Custom numerical checks
 
-- `is_finite_number()` detects NaN and infinity by comparison with
-  `MAX_FLOAT`; it does not call `math.isfinite()`.
+- `is_finite_number()` uses `math.isfinite()` to detect NaN and infinity.
 - `is_integer_value()` uses arithmetic remainder to detect integer-valued
   finite floats; it does not call `int()`.
 - `nearest_integer_without_builtin()` determines the exponential scale through
   arithmetic and explicit iteration.
-- `_checked_multiply()` checks both result multiplication and factor squaring
-  for overflow and severe underflow.
+- `_checked_multiply()` validates the actual multiplication result. This avoids
+  a rounded estimate rejecting a valid value near the floating-point maximum.
 
 ## Exception handling
 
@@ -79,6 +82,9 @@ Expected failures derive from `PowerCalculatorError`:
 - `InvalidInputError` - invalid text, NaN, or infinity.
 - `UnsupportedDomainError` - an unsupported real-valued combination.
 - `NumericRangeError` - overflow or severe underflow.
+- `ResultOverflowError` - a genuine infinite or out-of-range result; it is
+  also an `OverflowError`.
+- `UndefinedResultError` - a numerical algorithm produced NaN.
 - `ConvergenceError` - an approximation exceeds its iteration limit.
 
 The GUI catches these specific expected exceptions, clears the result, displays
@@ -89,10 +95,10 @@ not silently hidden.
 
 The interface contains labelled base and exponent fields, **Calculate**,
 **Clear**, and **Exit** buttons, and separate result and status areas. The Enter
-key performs the same action as **Calculate**. **Clear** resets all fields and
-returns focus to the base input.
+key performs the same action as **Calculate**. Escape and **Clear** both reset
+all fields and return focus to the base input.
 
-## Run the application
+## Running the Application
 
 Use Python 3 with Tkinter support. The program requires no third-party package,
 specific IDE, or IDE configuration.
@@ -115,6 +121,41 @@ python verify_power_calculator.py
 
 The script reports each case as `PASS` or `FAIL` and exits with a nonzero status
 if any check fails.
+
+## Running the Tests
+
+From the `D2` directory:
+
+```text
+python -m unittest test_power_calculator.py -v
+```
+
+The tests cover parsing, domain validation, both calculation paths, valid
+near-maximum results, and genuine overflow.
+
+## D3 Improvements Based on D2 Feedback
+
+- Moved numeric text conversion into `parse_numeric_input()`, which the GUI
+  calls before the numerical core.
+- Removed the `float(base)` conversion from `power_by_squaring()`; it now
+  accepts a numeric base and integer exponent.
+- Corrected overflow-boundary handling by validating actual computed results
+  and allowing a finite decimal-path result whose exponential scale is 1024.
+- Added regression tests for valid large finite results and genuine overflow.
+- Improved separation between GUI, parsing, domain validation, and numerical
+  calculation responsibilities.
+- Added semantic versioning through the single `APP_VERSION` constant.
+- Added keyboard accessibility for both Enter and Escape.
+- Preserved the original D2 program in `power_calculator_d2_backup.py`.
+
+## Code Quality Tools
+
+From the `D2` directory:
+
+```text
+flake8 power_calculator.py test_power_calculator.py
+pylint power_calculator.py test_power_calculator.py
+```
 
 ## Representative verification cases
 
@@ -141,11 +182,13 @@ rejected as insufficiently accurate. Approximation error can grow near numeric
 boundaries or for ill-conditioned inputs, and the calculator does not support
 complex-valued results.
 
-## D2 structure
+## Project structure
 
 ```text
 D2/
 |-- power_calculator.py          # Numerical layer and Tkinter application
+|-- power_calculator_d2_backup.py # Preserved pre-D3 D2 implementation
+|-- test_power_calculator.py     # unittest regression suite
 |-- verify_power_calculator.py   # Independent non-GUI verification
 |-- README.md                    # Usage, behavior, and limitations
 |-- IMPLEMENTATION.md            # Technical design documentation
